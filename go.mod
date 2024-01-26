@@ -1,3 +1,3 @@
-module github.com/dtomlinson91/traefik-api-key-middleware
+module github.com/psncius/traefik-api-middleware
 
 go 1.19
