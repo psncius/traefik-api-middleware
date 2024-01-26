@@ -2,7 +2,7 @@
 type: middleware
 iconPath: .assets/icon.png
 
-import: github.com/dtomlinson91/traefik-api-key-middleware
+import: github.com/psncius/traefik-api-middleware
 
 summary: "Authorise API requests with an API Key"
 
