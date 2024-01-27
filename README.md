@@ -18,15 +18,15 @@ Add to your Traefik static configuration
 experimental:
   plugins:
     traefik-api-key-middleware:
-      moduleName: "github.com/dtomlinson91/traefik-api-key-middleware"
+      moduleName: "https://github.com/psncius/traefik-api-middleware"
       version: "v0.1.2"
 ```
 
 #### toml
 
 ```toml
-[experimental.plugins.traefik-api-key-middleware]
-  moduleName = "github.com/dtomlinson91/traefik-api-key-middleware"
+[experimental.plugins.traefik-api-middleware]
+  moduleName = "https://github.com/psncius/traefik-api-middleware"
   version = "v0.1.2"
 ```
 
@@ -35,7 +35,7 @@ experimental:
 Add to your startup args:
 
 ```sh
---experimental.plugins.traefik-api-key-middleware.modulename=github.com/dtomlinson91/traefik-api-key-middleware
+--experimental.plugins.traefik-api-key-middleware.modulename=https://github.com/psncius/traefik-api-middleware
 --experimental.plugins.traefik-api-key-middleware.version=v0.1.2
 ```
 
@@ -67,7 +67,7 @@ http:
   [http.middlewares]
     [http.middlewares.my-traefik-api-key-middleware]
       [http.middlewares.my-traefik-api-key-middleware.plugin]
-        [http.middlewares.my-traefik-api-key-middleware.plugin.traefik-api-key-middleware]
+        [http.middlewares.my-traefik-api-key-middleware.plugin.traefik-api-middleware]
           authenticationHeader = true
           authenticationheaderName = "X-API-KEY"
           bearerHeader = true

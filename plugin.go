@@ -1,4 +1,4 @@
-package traefik_api_key_middleware
+package traefik_api_middleware
 
 import (
 	"context"
