@@ -46,10 +46,12 @@ type KeyAuth struct {
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
 	fmt.Printf("Creating plugin: %s instance: %+v, ctx: %+v\n", name, *config, ctx)
 
+	// check for empty keys
 	if len(config.Keys) == 0 {
 		return nil, fmt.Errorf("must specify at least one valid key")
 	}
 
+	// check at least one header is set
 	if !config.AuthenticationHeader && !config.BearerHeader {
 		return nil, fmt.Errorf("at least one header type must be true")
 	}
@@ -65,6 +67,9 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	}, nil
 }
 
+// contains takes an API key and compares it to the list of valid API keys. The return value notes whether the
+// key is in the valid keys
+// list or not.
 func contains(key string, validKeys []string) bool {
 	for _, a := range validKeys {
 		if a == key {
@@ -74,71 +79,47 @@ func contains(key string, validKeys []string) bool {
 	return false
 }
 
+// bearer takes an API key in the `Authorization: Bearer $token` form and compares it to the list of valid keys.
+// The token/key is extracted from the header value. The return value notes whether the key is in the valid keys
+// list or not.
 func bearer(key string, validKeys []string) bool {
 	re, _ := regexp.Compile(`Bearer\s(?P<key>[^$]+)`)
 	matches := re.FindStringSubmatch(key)
+
+	// If no match found the value is in the wrong form.
 	if matches == nil {
 		return false
 	}
 
+	// If found extract the key and compare it to the list of valid keys
 	keyIndex := re.SubexpIndex("key")
 	extractedKey := matches[keyIndex]
 	return contains(extractedKey, validKeys)
 }
 
-type responseWriterWrapper struct {
-	http.ResponseWriter
-	modifiedHeader http.Header
-	ignoreHeaders  []string
-}
-
-func newResponseWriterWrapper(rw http.ResponseWriter, ignoreHeaders []string) *responseWriterWrapper {
-	modifiedHeader := make(http.Header)
-	for k, vv := range rw.Header() {
-		modifiedHeader[k] = vv
-	}
-
-	return &responseWriterWrapper{
-		ResponseWriter: rw,
-		modifiedHeader: modifiedHeader,
-		ignoreHeaders:  ignoreHeaders,
-	}
-}
-
-func (rw *responseWriterWrapper) Header() http.Header {
-	for _, header := range rw.ignoreHeaders {
-		delete(rw.modifiedHeader, header)
-	}
-	return rw.modifiedHeader
-}
-
-func (rw *responseWriterWrapper) WriteHeader(statusCode int) {
-	for k, vv := range rw.modifiedHeader {
-		rw.ResponseWriter.Header()[k] = vv
-	}
-	rw.ResponseWriter.WriteHeader(statusCode)
-}
-
 func (ka *KeyAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	ignoreHeaders := []string{}
-	if ka.removeHeadersOnSuccess {
-		if ka.authenticationHeader {
-			ignoreHeaders = append(ignoreHeaders, ka.authenticationHeaderName)
-		}
-		if ka.bearerHeader {
-			ignoreHeaders = append(ignoreHeaders, ka.bearerHeaderName)
+	// Check authentication header for valid key
+	if ka.authenticationHeader {
+		if contains(req.Header.Get(ka.authenticationHeaderName), ka.keys) {
+			// X-API-KEY header contains a valid key
+			if ka.removeHeadersOnSuccess {
+				req.Header.Del(ka.authenticationHeaderName)
+			}
+			ka.next.ServeHTTP(rw, req)
+			return
 		}
 	}
-	wrappedRW := newResponseWriterWrapper(rw, ignoreHeaders)
 
-	if ka.authenticationHeader && contains(req.Header.Get(ka.authenticationHeaderName), ka.keys) {
-		ka.next.ServeHTTP(wrappedRW, req)
-		return
-	}
-
-	if ka.bearerHeader && bearer(req.Header.Get(ka.bearerHeaderName), ka.keys) {
-		ka.next.ServeHTTP(wrappedRW, req)
-		return
+	// Check authorization header for valid Bearer
+	if ka.bearerHeader {
+		if bearer(req.Header.Get(ka.bearerHeaderName), ka.keys) {
+			// Authorization header contains a valid Bearer token
+			if ka.removeHeadersOnSuccess {
+				req.Header.Del(ka.bearerHeaderName)
+			}
+			ka.next.ServeHTTP(rw, req)
+			return
+		}
 	}
 
 	var response Response
@@ -158,10 +139,12 @@ func (ka *KeyAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			StatusCode: http.StatusForbidden,
 		}
 	}
-
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 	rw.WriteHeader(response.StatusCode)
+
+	// If no headers or invalid key, return 403
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
+		// If response cannot be written, log error
 		fmt.Printf("Error when sending response to an invalid key: %s", err.Error())
 	}
 }
